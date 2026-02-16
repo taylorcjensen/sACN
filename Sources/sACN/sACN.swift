@@ -240,8 +240,10 @@ struct DMPLayer {
     private static let lengthStartingByte: UInt16 = 115
     static let propertyValueCountRange = 123...124
     static let flagsAndLengthRange = 115...116
-    
+    static let startCodeIndex = 125
+
     var dmxData: Data
+    var startCode: UInt8 = 0x00
     var count: Int {
         dmpLayerTemplate.count + dmxData.count
     }
@@ -254,6 +256,7 @@ struct DMPLayer {
         let pduLength = fullPacketLength - (Self.lengthStartingByte - 1)
         data[DMPLayer.flagsAndLengthRange] = flagsAndLength(length: pduLength).networkByteOrder.data
         data[DMPLayer.propertyValueCountRange] = UInt16(1 + dmxData.count).networkByteOrder.data
+        data[DMPLayer.startCodeIndex] = startCode
         data[126..<(126 + dmxData.count)] = dmxData
     }
 }
@@ -314,6 +317,7 @@ public final class Connection {
     private let rootLayer: RootLayer
     private let dataFramginLayer: DMXDataFramingLayer
     public private(set) var sequenceNumber: UInt8 = 0
+    private var prioritySequenceNumber: UInt8 = 0
     
     /// Starts a UDP Unicast or Multicast Connection, depending on the given `endpoint`, for the given `endpoint`
     /// - Parameters:
@@ -385,11 +389,15 @@ public final class Connection {
         defer { sequenceNumber &+= 1 }
         return sequenceNumber
     }
+    private func getNextPrioritySequenceNumber() -> UInt8 {
+        defer { prioritySequenceNumber &+= 1 }
+        return prioritySequenceNumber
+    }
     /// Send the given DMX Data to `universe`
-    /// - Parameter
-    ///   - data: DMX data. data count must be smaller or euqal to 512
-    ///   - priority:  sACN Package Priority beteween 1 and 200. Default is 100
-    ///   - isPreviewData:  default is false
+    /// - Parameters:
+    ///   - data: DMX data. data count must be smaller or equal to 512
+    ///   - priority: sACN Package Priority between 1 and 200. Default is 100
+    ///   - isPreviewData: default is false
     public func sendDMXData(_ data: Data, priority: UInt8 = 100, isPreviewData: Bool = false) {
         assert(data.count <= 512, "DMX data count must be smaller or equal to 512")
         let dmpLayer = DMPLayer(dmxData: data)
@@ -402,6 +410,24 @@ public final class Connection {
         }
         let packet = DataPacket(rootLayer: rootLayer, framingLayer: framingLayer, dmpLayer: dmpLayer)
         let packetData = packet.getData(sequenceNumber: getNextSequenceNumber())
+        connection.send(content: packetData, completion: .idempotent)
+    }
+    /// Send per-address priority data (E1.31 START code 0xDD).
+    ///
+    /// Each byte in `data` represents the priority for the corresponding DMX address.
+    /// Priority 0 means "do not look at this address from this source."
+    /// Uses an independent sequence number counter per E1.31 specification.
+    ///
+    /// - Parameters:
+    ///   - data: Priority values per address. Count must be <= 512.
+    ///   - priority: sACN universe priority between 1 and 200. Default is 100.
+    public func sendPerAddressPriority(_ data: Data, priority: UInt8 = 100) {
+        assert(data.count <= 512, "Priority data count must be smaller or equal to 512")
+        let dmpLayer = DMPLayer(dmxData: data, startCode: 0xDD)
+        var framingLayer = dataFramginLayer
+        framingLayer.priority = priority
+        let packet = DataPacket(rootLayer: rootLayer, framingLayer: framingLayer, dmpLayer: dmpLayer)
+        let packetData = packet.getData(sequenceNumber: getNextPrioritySequenceNumber())
         connection.send(content: packetData, completion: .idempotent)
     }
     deinit {
