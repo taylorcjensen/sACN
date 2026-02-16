@@ -317,7 +317,9 @@ public final class Connection {
     private let rootLayer: RootLayer
     private let dataFramginLayer: DMXDataFramingLayer
     public private(set) var sequenceNumber: UInt8 = 0
-    private var prioritySequenceNumber: UInt8 = 0
+    /// Offset from data sequence numbers to avoid confusing receivers
+    /// that track sequence numbers per-source rather than per-start-code.
+    private var prioritySequenceNumber: UInt8 = 128
     
     /// Starts a UDP Unicast or Multicast Connection, depending on the given `endpoint`, for the given `endpoint`
     /// - Parameters:

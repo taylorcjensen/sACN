@@ -53,4 +53,16 @@ final class sACNTests: XCTestCase {
         // DMX sequence should be unchanged after sending priority
         XCTAssertEqual(connection.sequenceNumber, dmxSeqAfter)
     }
+    func testPrioritySequenceStartsOffsetFromDataSequence() {
+        // Per-address priority sequence starts at 128 to avoid matching
+        // data sequence numbers, which confuses some sACN receivers.
+        let connection = Connection(universe: 1)
+        // Data starts at 0
+        XCTAssertEqual(connection.sequenceNumber, 0)
+        // Send one of each and verify they differ
+        connection.sendDMXData(Data([0xFF]), priority: 100)
+        connection.sendPerAddressPriority(Data([100]), priority: 100)
+        // Data seq is now 1, priority seq is now 129 -- they should not match
+        XCTAssertEqual(connection.sequenceNumber, 1)
+    }
 }
