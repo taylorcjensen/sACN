@@ -18,6 +18,7 @@ connection.sendDMXData(Data([0, 10, 255, 0, 0, 0, 255]))
 ## Features
 - Sending DMX Data via UDP Multicast and Unicast on IPv4/IPv6
 - sACN Package Priority
+- Per-Address Priority (0xDD packets)
 - Preview Data
 - Depends only on `Foundation` and `Network.framework`
 
@@ -31,11 +32,32 @@ For Unicast, you need to specify an IPv6 Endpoint. For Multicast, you need to sp
 let connection = Connection(universe: 1, ipVersion: .v6)
 ```
 
-### Priority 
+### Priority
 After you created a `connection`, you can set the priority per packet using the `Connection.sendDMXData(_:priority:isPreviewData:)` method. The default priority is `100`.
 
 ```swift
 connection.sendDMXData(data, priority: 200)
+```
+
+### Per-Address Priority
+Send per-address priority (E1.31 start code 0xDD) to claim specific DMX addresses at different priority levels. Each byte represents the priority for the corresponding address. Priority `0` means this source has no data for that address.
+
+```swift
+// Claim addresses 1-5 at priority 150, ignore all others
+var priorities = Data(repeating: 0, count: 512)
+priorities[0] = 150  // Address 1
+priorities[1] = 150  // Address 2
+priorities[2] = 150  // Address 3
+priorities[3] = 150  // Address 4
+priorities[4] = 150  // Address 5
+connection.sendPerAddressPriority(priorities, priority: 150)
+```
+
+Send per-address priority alongside your DMX data packets so receivers know which addresses your source claims:
+
+```swift
+connection.sendDMXData(dmxData, priority: 150)
+connection.sendPerAddressPriority(priorities, priority: 150)
 ```
 ### Preview Data
 After you created a `connection`, you can choose per packet if it is preview data or not using the  `Connection.sendDMXData(_:priority:isPreviewData:)` method. `isPreviewData` defaults to `false`.
