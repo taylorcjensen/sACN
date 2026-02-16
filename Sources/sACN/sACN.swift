@@ -317,9 +317,6 @@ public final class Connection {
     private let rootLayer: RootLayer
     private let dataFramginLayer: DMXDataFramingLayer
     public private(set) var sequenceNumber: UInt8 = 0
-    /// Offset from data sequence numbers to avoid confusing receivers
-    /// that track sequence numbers per-source rather than per-start-code.
-    private var prioritySequenceNumber: UInt8 = 128
     
     /// Starts a UDP Unicast or Multicast Connection, depending on the given `endpoint`, for the given `endpoint`
     /// - Parameters:
@@ -391,10 +388,6 @@ public final class Connection {
         defer { sequenceNumber &+= 1 }
         return sequenceNumber
     }
-    private func getNextPrioritySequenceNumber() -> UInt8 {
-        defer { prioritySequenceNumber &+= 1 }
-        return prioritySequenceNumber
-    }
     /// Send the given DMX Data to `universe`
     /// - Parameters:
     ///   - data: DMX data. data count must be smaller or equal to 512
@@ -418,7 +411,8 @@ public final class Connection {
     ///
     /// Each byte in `data` represents the priority for the corresponding DMX address.
     /// Priority 0 means "do not look at this address from this source."
-    /// Uses an independent sequence number counter per E1.31 specification.
+    /// Shares the same sequence counter as DMX data packets to maintain a single
+    /// monotonic sequence per source, matching ETC Eos behavior.
     ///
     /// - Parameters:
     ///   - data: Priority values per address. Count must be <= 512.
@@ -429,7 +423,7 @@ public final class Connection {
         var framingLayer = dataFramginLayer
         framingLayer.priority = priority
         let packet = DataPacket(rootLayer: rootLayer, framingLayer: framingLayer, dmpLayer: dmpLayer)
-        let packetData = packet.getData(sequenceNumber: getNextPrioritySequenceNumber())
+        let packetData = packet.getData(sequenceNumber: getNextSequenceNumber())
         connection.send(content: packetData, completion: .idempotent)
     }
     deinit {

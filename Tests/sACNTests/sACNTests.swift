@@ -43,26 +43,22 @@ final class sACNTests: XCTestCase {
         XCTAssertEqual(data[127], 0x02)
         XCTAssertEqual(data[128], 0x03)
     }
-    func testConnectionPrioritySequenceIsIndependent() {
+    func testSharedSequenceNumberAcrossDataAndPriority() {
+        // DATA and PAP share a single monotonic sequence counter,
+        // matching ETC Eos behavior and avoiding jump warnings in sACNView.
         let connection = Connection(universe: 1)
-        connection.sendDMXData(Data([0xFF]), priority: 100)
-        connection.sendDMXData(Data([0xFF]), priority: 100)
-        connection.sendDMXData(Data([0xFF]), priority: 100)
-        let dmxSeqAfter = connection.sequenceNumber  // should be 3
-        connection.sendPerAddressPriority(Data([100]), priority: 100)
-        // DMX sequence should be unchanged after sending priority
-        XCTAssertEqual(connection.sequenceNumber, dmxSeqAfter)
-    }
-    func testPrioritySequenceStartsOffsetFromDataSequence() {
-        // Per-address priority sequence starts at 128 to avoid matching
-        // data sequence numbers, which confuses some sACN receivers.
-        let connection = Connection(universe: 1)
-        // Data starts at 0
         XCTAssertEqual(connection.sequenceNumber, 0)
-        // Send one of each and verify they differ
+
         connection.sendDMXData(Data([0xFF]), priority: 100)
-        connection.sendPerAddressPriority(Data([100]), priority: 100)
-        // Data seq is now 1, priority seq is now 129 -- they should not match
         XCTAssertEqual(connection.sequenceNumber, 1)
+
+        connection.sendPerAddressPriority(Data([100]), priority: 100)
+        XCTAssertEqual(connection.sequenceNumber, 2)
+
+        connection.sendDMXData(Data([0xFF]), priority: 100)
+        XCTAssertEqual(connection.sequenceNumber, 3)
+
+        connection.sendPerAddressPriority(Data([100]), priority: 100)
+        XCTAssertEqual(connection.sequenceNumber, 4)
     }
 }
